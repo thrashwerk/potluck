@@ -8,7 +8,19 @@ set -e
 set -o pipefail
 
 SCRIPT=$(readlink -f "$0")
-TEMPLATEPATH=$(dirname "$SCRIPT")/../templates
+SCRIPTDIR=$(dirname "$SCRIPT")
+TEMPLATEPATH=$SCRIPTDIR/../templates
+
+export PATH=/usr/local/bin:"$PATH"
+export VAULT_ADDR=https://active.vault.service.consul:8200
+export VAULT_CLIENT_TIMEOUT=300s
+export VAULT_MAX_RETRIES=5
+export VAULT_CLIENT_CERT=/mnt/vaultcerts/agent.crt
+export VAULT_CLIENT_KEY=/mnt/vaultcerts/agent.key
+export VAULT_CACERT=/mnt/vaultcerts/ca_root.crt
+unset VAULT_FORMAT
+
+. "${SCRIPTDIR}/lib.sh"
 
 # real config dir
 mkdir -p /usr/local/etc/nginx
@@ -17,13 +29,17 @@ mkdir -p /usr/local/etc/nginx
 # safe(r) separator for sed
 sep=$'\001'
 
+# Allow Consul and Vault servers to get Nomad client certs
+add_id_group_policy "vault-servers" "issue-nomad-client-cert"
+add_id_group_policy "consul-servers" "issue-nomad-client-cert"
+
 # Copy over consul-template template for Nomad certs
-< "$TEMPLATEPATH/nomad.tpl.in" \
+< "$TEMPLATEPATH/cluster-nomad.tpl.in" \
   sed "s${sep}%%nodename%%${sep}$NODENAME${sep}g" | \
   > "/mnt/templates/nomad.tpl"
 
 # Append consul-template config with Nomad template settings
-cat << EOF >> /usr/local/etc/consul-template.d/consul-template.hcl
+cat << EOF >> /usr/local/etc/consul-template-consul.d/consul-template-consul.hcl
 
 template {
   source      = "/mnt/templates/nomad.tpl"
@@ -33,7 +49,7 @@ template {
 EOF
 
 # Copy over Nginx config for Nomad proxy
-cp "$TEMPLATEPATH/nomadproxy.conf.in" \
+cp "$TEMPLATEPATH/cluster-nomadproxy.conf.in" \
   /usr/local/etc/nginx/nomadproxy.conf
 
 service nginx enable
