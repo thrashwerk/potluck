@@ -38,15 +38,8 @@ add_id_group_policy "consul-servers" "issue-nomad-client-cert"
   sed "s${sep}%%nodename%%${sep}$NODENAME${sep}g" | \
   > "/mnt/templates/nomad.tpl"
 
-# Append consul-template config with Nomad template settings
-cat << EOF >> /usr/local/etc/consul-template-consul.d/consul-template-consul.hcl
-
-template {
-  source      = "/mnt/templates/nomad.tpl"
-  destination = "/mnt/nomadcerts/nomad.checksum"
-  command     = "service nginx reload nomadproxy; true"
-}
-EOF
+# Uncomment Nomad cert template in consul-template config
+sed -i '' 's/^##nomadproxy##//g' /usr/local/etc/consul-template-consul.d/consul-template-consul.hcl
 
 # Copy over Nginx config for Nomad proxy
 cp "$TEMPLATEPATH/cluster-nomadproxy.conf.in" \
